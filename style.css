@@ -1,0 +1,68 @@
+@charset "utf-8";
+body { height:100%}
+body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, code, form, fieldset, legend, input, textarea, p, blockquote, th, td {margin:0;padding:0;}
+ul,ol,li { list-style:none; }
+h1, h2, h3, h4, h5, h6 {font-size:100%;font-weight:normal;}
+table {border-collapse:collapse;border-spacing:0;}
+select, input, button, textarea {font:100% arial,SimSun; }
+body { font:12px Arial,SimSun; color:#333; left top repeat-x #44c9f6; }
+img { border:0; }
+a{ color:#00529b; text-decoration:none;}
+a:hover { color:#f60; text-decoration:underline; }
+.page { width:690px; padding-top: 0px; padding-left: 10px; padding-right: 10px; padding-bottom:10px; margin:0 auto; background:#fff; overflow:visible; }
+.bold { font-weight:700;}
+.clear { height:0; overflow:hidden; clear:both; }
+.left { float:left; }
+.right { float:right; }
+.appTitleBox {width:690px; height: 100px; background:url(train.jpg)}
+.optionBox {border-bottom:3px solid #ebebeb; padding-top:5px; padding-bottom:5px;}
+.optionLable { color: #257FB3; font-weight: bold;}
+.optionSmallLable { font-size: 13px;}
+.sortButton { width: 90px; float:left;}
+.sortButtonCell { width: 100px;}
+.topRoutes { width: 690px;}
+.ShowRsListInfBox { border: 1px solid #dedede; position:relative; margin-top:8px; float:left; background:#e8e8e8; }
+.ShowRsListInfTitleBox { height:32px; background:#f0f0f0; width: 690px; }
+.ShowRsListInfJt { position:absolute; width:13px; height:8px; overflow:hidden; background:url(bg.gif) left -33px no-repeat; left:35px; top:-8px; }
+.ShowRsListInfTitle li {  height:32px; line-height:32px; float:left; color:#666;}
+.SrL_1 { width:20px;float:left;text-align:center; }
+.SrL_2 { width:80px;float:left; }
+.SrL_3 { width:40px;float:left;text-align:center; }
+.SrL_4 { width:40px;float:left;text-align:center; }
+.SrL_5 { width:20px;float:left;text-align:center; }
+.SrL_6 { width:40px;float:left;text-align:center; }
+.SrL_7 { width:45px;float:left;text-align:center; }
+.SrL_8 { width:25px;float:left;text-align:center; }
+.howRsListInfClose { float:right; width:10px; height:10px; background:url(hcp_result_bg.gif) left -42px; margin:10px 10px 0 0; display:inline;}
+.ShowRsList {  clear:both; float:left; padding:0 2px; }
+.ShowRsListBg { background:#fff; overflow:hidden; margin:0 2px; }
+.ShowRsList li { border-bottom:1px solid #f2f2f2; padding:10px 0; float:left; color:#666; }
+.Statistics { padding:10px; }
+.Statistics span { float:right; word-spacing:1em; color:#666; }
+.TrListTitleBox { height:30px; background:#e8e8e8; margin-top:10px; width:690px;}
+.TrListTitleBox li { overflow:hidden; height:30px; line-height:30px; line-height:32px\9; font-weight:700;}
+.TrlistWd_1 { width:153px; padding-left: 10px; float:left;}
+.TrlistWd_2 { width:130px; float:left;}
+.TrlistWd_3 { width:50px; float:left;}
+.TrlistWd_4 { width:50px; float:left;text-align:center;}
+.TrlistWd_5 { width:55px; float:left;text-align:center;}
+.TrlistWd_6 { width:90px; float:left;text-align:left;}
+.TrlistWd_7 { width:80px; float:left;text-align:left;}
+.TrlistWd_8 { width:55px; float:left;text-align:right;}
+.TrList { border-bottom:8px solid #ebebeb; float:left; width:690px; padding:10px 0; }
+.TrList_1 { width:80px; float:left;padding-left:10px;padding:22px 0 0 10px; }
+.TrList_2 { width:265px;float:left; padding-left:10px; padding-right:15px; }
+.TrList_3 { width:100px;float:left; }
+.TrList_4 { width:57px;float:left; font-size:12px; font-weight:bold; line-height:20px; padding-top:10px; }
+.TrList_5 { width:90px;float:left; font-size:12px; font-weight:bold; line-height:20px; padding-top:10px; }
+.TrList_6 { width:40px;float:left; font-size:13px; font-weight:bold; line-height:20px; padding-top:10px; padding-left:10px; color:red;}
+.TrListSp { width:150px; display:inline-block; }
+.TrList_Md { height:30px; background:url(hcp_result_bg.gif) left -299px repeat-x; }
+.TrListMdText { float:left; padding:0 5px; background:#FFF; display:inline; color:#f60; margin:6px 0 0 145px; margin-top:8px\9; }
+.TrListSp_1 { width:60px; display:inline-block; }
+.TrList3Text { line-height:30px; line-height:33px\9; height:32px; overflow:hidden; }
+.TrTipsBox { margin:0 5px; height:31px; color:red; border-top:1px solid #f5f5f5; background:url(hcp_result_bg.gif) left -299px repeat-x;}
+.TrTipsBox_1 { float:left; width:250px; padding-left:100px; }
+.TrTipsBoxText { float:left; background:#fff; padding:8px 8px 0; padding-top:10px\9;  }
+.TrTipsBox_2 { float:left; width:208px; }
+.TrTipsBox_3 { float:left; }

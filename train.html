@@ -1,0 +1,706 @@
+﻿<html xmlns="http://www.w3.org/1999/xhtml">
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>小猪的火车</title>
+		<link	href="style.css" type="text/css" rel="stylesheet"/>
+		<script type="text/javascript" language="javascript" src="common.js"></script>
+		<script type="text/javascript" language="javascript" src="template.js"></script>
+		<script type="text/javascript" language="javascript" src="XML.js"></script>
+		<script type="text/javascript" language="javascript" src="data__tickets"></script>
+		<script type="text/javascript" language="javascript" src="route.js"></script>
+		<script type="text/javascript">
+			var maxRecords = 30;
+			function notifyEvent(listeners, event, args){
+					for(var i = 0; i < listeners.length; i++){
+						var func = listeners[i][event];
+						if(func) func.apply(this, args ? args : []);
+					}
+			}
+
+			//搜索
+			var searchingRoutes, isAll, searchingListeners = [];
+			function searchTrain(trainNumber){
+				notifyEvent(searchingListeners, "before");
+				var routes;
+				try{
+					routes = findTrain(trainNumber);
+					calculateCost(routes);
+					searchingRoutes = routes;
+				}catch(e){
+					alert(e.message);
+					return;
+				}
+				isAll = true;
+				notifyEvent(searchingListeners, "after", [routes, trainNumber]);
+			}
+			function searchStation(station){
+				notifyEvent(searchingListeners, "before");
+				var routes;
+				try{
+					routes = findPassedTrains(station);
+					calculateCost(routes);
+					searchingRoutes = routes;
+				}catch(e){
+					alert(e.message);
+					return;
+				}
+				isAll = true;
+				notifyEvent(searchingListeners, "after", [routes, station, "共有" + routes.length + "列火车经过<b>" + station + "</b>车站"]);
+			}
+			function searchTransfer(fromStation, toStation){
+				notifyEvent(searchingListeners, "before");
+				var routes;
+				try{
+					routes = findRoute(fromStation, toStation);
+					calculateCost(routes);
+					searchingRoutes = routes;
+				}catch(e){
+					alert(e.message);
+					return;
+				}
+				isAll = false;
+				notifyEvent(searchingListeners, "after", [routes, "<b>" + fromStation + "</b>--<b>" + toStation + "</b>"]);
+			}
+			var blankP = /\s*/g;
+			function onSearchTrain(){
+				var trainNumber = this.trainNumber.value.replace(blankP, "");
+				if(trainNumber) searchTrain(trainNumber);
+				return false;
+			}
+			function onSearchStation(){
+				var station = this.station.value.replace(blankP, "");
+				if(station) searchStation(station);
+				return false;
+			}
+			function onSearchTransfer(){
+				var fromStation = this.fromStation.value.replace(blankP, "");
+				var toStation = this.toStation.value.replace(blankP, "");
+				if(fromStation && toStation) searchTransfer(fromStation, toStation);
+				return false;
+			}
+			//过虑
+			var sortingRoutes;
+			var whileSpaceP = /\s*/g, filteringRoutes, filteringListeners = [];
+			function onFilterByTime(){
+				notifyEvent(filteringListeners, "before");
+				var timeP = /[0-5]?[0-9]:[0-5]?[0-9]*/;
+				if(searchingRoutes){
+					var times = new Array(8);
+					for(var i = 0; i < times.length; i++){
+						var time = this["time" + (i + 1)].value.replace(whileSpaceP, "");
+						if(time){
+							if(!timeP.test(time)){
+								alert("时间格式不正确: " + time);
+								return false;
+							}
+							times[i] = time2minute(time);
+						}
+					}
+					var transferStation = this.transferStation.value.replace(whileSpaceP, "");
+					if(transferStation){
+						transferStation = getStation(transferStation);
+						if(!transferStation){
+							alert("换乘站不存在: " + this.transferStation.value);
+							return false;
+						}
+					}
+					function judge(times, k, time){
+						var satisfied = true;
+						if(times[k] == null){
+							if(times[k + 1] != null){
+								satisfied = time <= times[k + 1];
+							}
+						}else if(times[k + 1] == null){
+							if(times[k] != null){
+								satisfied = time >= times[k];
+							}
+						}else if(times[k] <= times[k + 1]){
+							satisfied = time >= times[k] && time <= times[k + 1];
+						}else if(times[k] > times[k + 1]){
+							satisfied = time >= times[k] && time <= 1400 || time > 1400 && time <= times[k + 1];
+						}
+						return satisfied;
+					}
+					filteringRoutes = [];
+					for(var i = 0; i < searchingRoutes.length; i++){
+						var route = searchingRoutes[i];
+						var j = 0;
+						for(; j < route.length; j++){
+							var routei = route[j];
+							var train = trains[routei.train];
+							var departureTime = time2minute(train.stops[routei.start][i_stop__departure_time]);
+							var arrivalTime = time2minute(train.stops[routei.end][i_stop__arrival_time]);
+							var boolValues = [];
+							var k = 4 * j;
+							if(!judge(times, k, departureTime) || !judge(times, k + 2, arrivalTime)) break;
+						}
+						if(j == route.length){
+							var thisStation = trains[route[0].train].stops[route[0].end][i_stop__station]
+							if(transferStation == thisStation){
+							  filteringRoutes.push(route);
+							} else {
+  							var brothers = station_list[transferStation][i_station__brothers];
+                if(brothers){
+                    for(var k = 0; k < brothers.length; k++){
+                      if(brothers[k] == thisStation){
+                        filteringRoutes.push(route);
+                        break;
+                      }
+                    }
+                }
+              }
+						}
+					}
+					notifyEvent(filteringListeners, "after", [filteringRoutes]);
+				}
+				return false;
+			}
+
+			//排序
+			var desc, locked, descCheckBox, lockCheckBox, lockingRoutes, sortingListeners = [];
+			function sortBy(attr, desc, tip){
+				var n = desc ? 1 : -1;
+				var routes = locked ? lockingRoutes : filteringRoutes;
+				if(!routes) routes = searchingRoutes;
+				if(routes){
+					notifyEvent(sortingListeners, "before");
+					routes.sort(function(a, b){
+						if(typeof attr == "function"){
+							a = attr(a);
+							b = attr(b);
+						}else{
+							a = a[attr];
+							b = b[attr];
+						}
+						if(a < b) return n;
+						if(a > b) return -n;
+						if(a == b) return 0;
+					});
+					notifyEvent(sortingListeners, "after", [routes, "", "", tip]);
+				}
+			}
+			function onSort(){
+				sortBy(this.id, desc, this.value);
+				return false;
+			}
+			function onSortByTrainNumber(){
+				sortBy(function(route){
+					return route[0].train;
+				}, desc, this.value);
+				return false;
+			}
+			function onChangeSort(){
+				if(!descCheckBox) descCheckBox = this;
+				desc = this.checked;
+			}
+			function onChangeLock(){
+				if(!lockCheckBox) lockCheckBox = this;
+				locked = this.checked;
+				if(locked){
+					var routes = filteringRoutes;
+					if(!routes) routes = sortingRoutes;
+					if(!routes) routes = searchingRoutes;
+					if(routes){
+						lockingRoutes = [];
+						for(var i = 0; i < maxRecords && i < routes.length; i++){
+							lockingRoutes.push(routes[i]);
+						}
+					}
+				}
+			}
+
+			searchingListeners.push({
+				"before": function(){
+					filteringRoutes = null;
+				},
+				"after": function(routes, searchTip){
+					document.getElementById("searchTip").innerHTML = searchTip ? searchTip : "";
+					sortBy("transferCost", false, "");
+				}
+			});
+
+			var sortingStateListener = {
+				"before": function(){
+					if(lockCheckBox) lockCheckBox.checked = false;
+					if(descCheckBox) descCheckBox.checked = false;
+					desc = false;
+					locked = false;
+					lockingRoutes = null;
+				}
+			};
+			searchingListeners.push(sortingStateListener);
+			filteringListeners.push(sortingStateListener);
+
+			//显示
+			var trainTemplateStructure = null;
+			var displayListener = {
+				"before": function(){
+					document.getElementById("topRoutes").innerHTML = "";
+				},
+				"after": function(routes, searchTip, resultTip, sortTip){
+					var topRoutes = createRoutesForDisplay(routes, !isAll ? maxRecords : routes.length);
+					document.getElementById("topRoutes").innerHTML = topRoutes.length > 0 ? buildString(trainTemplateStructure, topRoutes).replace(/display:\s*none;?/i, "") : "";
+					document.getElementById("resultTip").innerHTML = resultTip ? resultTip : "共<b>" + routes.length + "</b>条记录, 显示<b>" + topRoutes.length + "</b>条记录";
+					document.getElementById("sortTip").innerHTML = sortTip ? sortTip : "";
+				}
+			};
+			searchingListeners.push(displayListener);
+			filteringListeners.push(displayListener);
+			sortingListeners.push(displayListener);
+
+			function onLoad(){
+					var topRoutesNode = document.getElementById("topRoutes");
+					if(!trainTemplateStructure){
+						trainTemplateStructure = buildTemplateStructure(topRoutesNode.innerHTML, 0);
+					}
+
+					var params = {};
+					var kvPairP = /([^=]+)=(.+)/;
+					var query = decodeURI(window.location.search);
+					if(query){
+						query = query.substring(1, query.length).split("&");
+						for(var i = 0; i < query.length; i++){
+							var result = kvPairP.exec(query[i]);
+							if(result) params[result[1]] = result[2];
+						}
+					}
+					if(params["station"]){
+						document.getElementById("search").style.display = "none";
+						var station = params["station"];
+						searchStation(station);
+						document.title = station;
+					}	else if(params["train"]){
+						document.getElementById("search").style.display = "none";
+						var trainNumber = params["train"];
+						searchTrain(trainNumber);
+						document.getElementById("routeDetail").style.display = "";
+						document.title = trainNumber;
+					}
+			}
+			if (window.addEventListener)
+			    window.addEventListener("load", onLoad, false);
+			else if (window.attachEvent) window.attachEvent("onload", onLoad);
+			else window.onload = onLoad;
+
+			//换乘详细
+			function findAncestorById(node, id){
+				var node = node.parentNode;
+				while(node){
+					if(node.id == id) return node;
+					node = node.parentNode;
+				}
+			}
+			function findChildById(node, id){
+				var aNode = null;
+				XML.preorder(node, function(node){
+					if(node.id == id){
+						aNode = node;
+						return XML.WALK_STOP;
+					}
+				});
+				return aNode;
+			}
+			//父节点会抓获子节点的点击事件， 点关闭按钮的时候无法关闭routeDetail面板
+			var clicked = false;
+			function triggerRouteDetail(){
+				if(clicked){
+					clicked = false;
+					return;
+				}
+				var routeDetailNode = findChildById(this, "routeDetail");
+				if(routeDetailNode) routeDetailNode.style.display = routeDetailNode.style.display == "" ? "none" : "";
+			}
+			function clickRouteDetail(){
+				clicked = true;
+			}
+			function closeRouteDetail(){
+				var node = findAncestorById(this, "routeDetail");
+				if(node) node.style.display = "none";
+				clicked = true;
+			}
+		</script>
+	</head>
+	<body>
+		<div class="page">
+			<div class="appTitleBox"></div>
+			<div id="search">
+				<div class="optionBox">
+					<form onsubmit="return onSearchTrain.call(this);">
+						<table cellspacing="0" cellpadding="0">
+							<tr>
+								<td>
+									<span class="optionLable">车次：</span>
+								</td>
+								<td>
+									<input type="text" name="trainNumber">
+								</td>
+								<td>
+									<input type="submit" value="搜索"></input>
+								</td>
+							</tr>
+						</table>
+					</form>
+				</div>
+				<div class="optionBox">
+					<form onsubmit="return onSearchStation.call(this);">
+						<table cellspacing="0" cellpadding="0">
+							<tr>
+								<td>
+									<span class="optionLable">车站：</span>
+								</td>
+								<td>
+									<input type="text" name="station">
+								</td>
+								<td>
+									<input type="submit" value="搜索"></input>
+								</td>
+							</tr>
+						</table>
+					</form>
+				</div>
+				<div class="optionBox">
+					<form onsubmit="return onSearchTransfer.call(this);">
+						<table cellspacing="0" cellpadding="0">
+							<tr>
+								<td>
+									<span class="optionLable">换乘：</span>
+								</td>
+								<td>
+									<span class="optionSmallLable">出发站</span>
+								</td>
+								<td>
+									<input type="text" name="fromStation">
+								</td>
+								<td>
+									<span class="optionSmallLable">到达站</span>
+								</td>
+								<td>
+									<input type="text" name="toStation">
+								</td>
+								<td>
+									<input type="submit" value="搜索"></input>
+								</td>
+							</tr>
+						</table>
+					</form>
+				</div>
+			</div>
+			<div id="option">
+				<div class="optionBox">
+					<form onsubmit="return onFilterByTime.call(this);">
+						<table cellspacing="0" cellpadding="0">
+							<tr>
+								<td rowspan="2" class="optionLable">过滤：</td>
+								<td>
+									<span class="optionSmallLable">出发</span>
+								</td>
+								<td>
+									<input type="text" name="time1" style="width:50px">至<input type="text" name="time2" style="width:50px">
+								</td>
+								<td>
+									<span class="optionSmallLable">到达</span>
+								</td>
+								<td>
+									<input type="text" name="time3" style="width:50px">至<input type="text" name="time4" style="width:50px">
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<span class="optionSmallLable">出发</span>
+								</td>
+								<td>
+									<input type="text" name="time5" style="width:50px">至<input type="text" name="time6" style="width:50px">
+								</td>
+								<td>
+									<span class="optionSmallLable">到达</span>
+								</td>
+								<td>
+									<input type="text" name="time7" style="width:50px">至<input type="text" name="time8" style="width:50px">
+								</td>
+								<td>
+									<span class="optionSmallLable">换乘站</span>
+								</td>
+								<td>
+									<input type="text" name="transferStation" style="width:60px">
+								</td>
+								<td>
+									<input type="submit" value="过滤"></input>
+								</td>
+							</tr>
+						</table>
+					</form>
+				</div>
+				<div class="optionBox">
+					<table cellspacing="0" cellpadding="0">
+						<tr>
+							<td rowspan="3" class="optionLable">排序：</td>
+							<td style="padding-right: 5px">
+								<span>降序</span><input type="checkbox" onclick="onChangeSort.call(this);"></input>
+							</td>
+							<td>
+								<span>锁定</span><input type="checkbox" onclick="onChangeLock.call(this);"></input>
+							</td>
+							<td colspan="4"></td>
+						</tr>
+						<tr>
+							<td class="sortButtonCell">
+								<input type="button" value="出发1" class="sortButton" id="departureTime0" onclick="onSort.call(this);"></input>
+							</td>
+							<td class="sortButtonCell">
+								<input type="button" value="到达1" class="sortButton" id="arrivalTime0" onclick="onSort.call(this);"></input>
+							</td>
+							<td class="sortButtonCell">
+								<input type="button" value="出发2" class="sortButton" id="departureTime1" onclick="onSort.call(this);"></input>
+							</td>
+							<td class="sortButtonCell">
+								<input type="button" value="到达2" class="sortButton" id="arrivalTime1" onclick="onSort.call(this);"></input>
+							</td>
+							<td colspan="2"></td>
+						</tr>
+						<tr>
+							<td class="sortButtonCell">
+								<input type="button" value="车次" class="sortButton" onclick="onSortByTrainNumber.call(this);"></input>
+							</td>
+							<td class="sortButtonCell">
+								<input type="button" value="运行耗时" class="sortButton" id="travelCost" onclick="onSort.call(this);"></input>
+							</td>
+							<td class="sortButtonCell">
+								<input type="button" value="换乘耗时" class="sortButton" id="transferCost" onclick="onSort.call(this);"></input>
+							</td>
+							<td class="sortButtonCell">
+								<input type="button" value="总耗时" class="sortButton" id="totalCost" onclick="onSort.call(this);"></input>
+							</td>
+							<td class="sortButtonCell">
+								<input type="button" value="里程" class="sortButton" id="mileage" onclick="onSort.call(this);"></input>
+							</td>
+							<td class="sortButtonCell">
+								<input type="button" value="花费" class="sortButton" id="feeCost" onclick="onSort.call(this);"></input>
+							</td>
+						</tr>
+					</table>
+				</div>
+			</div>
+			<div style="font-size: 18px"><span id="searchTip" class="optionLable" style="padding-right: 10px"></span><span id="resultTip" style="padding-right: 10px"></span><span id="sortTip" style="color: red"></span></div>
+			<div id="topRoutes" class="topRoutes">
+				<div style="display: none">
+					<ul class="TrListTitleBox">
+						<li class="TrlistWd_1">
+							车次
+						</li>
+						<li class="TrlistWd_2">
+							发站-到站
+						</li>
+						<li class="TrlistWd_3">
+							<span>发时</span>
+						</li>
+						<li class="TrlistWd_4">
+							<span>到时</span>
+						</li>
+						<li class="TrlistWd_5">
+							<span>里程</span>
+						</li>
+						<li class="TrlistWd_6">
+							<span><b>运行耗时</b></span>
+						</li>
+						<li class="TrlistWd_7">
+							<span><b>总共耗时</b></span>
+						</li>
+						<li class="TrlistWd_8">
+							<span><b>花费</b></span>
+						</li>
+					</ul>
+					<div class="clear"></div>
+					<!-- ui-list-row-begin -->
+					<div class="TrList" title="点击查看详情" id="routeBrief"
+						onclick="triggerRouteDetail.call(this);"
+						style="cursor: pointer; background-color: rgb(245, 249, 252);">
+						<div class="TrList_2">
+						<!-- ui-list-row-begin attr trains -->
+							<!-- visible("${transferCost}" != "undefined") -->
+							<div class="TrList_Md">
+								<p class="TrListMdText">
+									${fromStation}
+								</p>
+							</div>
+							<!-- visible-end -->
+							<p>
+								<span class="TrListSp"> <span class="bold f14">${train}</span><span style="padding-left: 3px; font-size: 9px; color: red">${trainType}</span></span>
+								<span class="c666">${fromStation}-${toStation}</span>
+							</p>
+						<!-- ui-list-row-end -->
+						</div>
+						<div class="TrList_3">
+						<!-- ui-list-row-begin attr time -->
+							<!-- visible("${transferCost}" != "undefined") -->
+							<p class="TrList3Text">
+								停留${transferCost}
+							</p>
+							<!-- visible-end -->
+							<p class="c666">
+								<span class="TrListSp_1">${departureTime}</span>${arrivalTime}
+							</p>
+						<!-- ui-list-row-end -->
+						</div>
+						<div class="TrList_4">
+							${mileage}公里
+						</div>
+						<div class="TrList_5">
+							${travelCost}
+						</div>
+						<div class="TrList_5">
+							${totalCost}
+						</div>
+						<div class="TrList_6">
+							<b>${feeCost}</b>
+						</div>
+						<div class="ShowRsListInfBox" id="routeDetail" onclick="clickRouteDetail.call(this)" style="cursor: text; display: none">
+							<div class="ShowRsListInfJt"></div>
+							<div class="ShowRsListInfTitleBox">
+								<a class="howRsListInfClose" onclick="closeRouteDetail.call(this)" style="cursor: pointer;"></a>
+								<ul class="ShowRsListInfTitle">
+									<li class="SrL_1">
+										
+									</li>
+									<li class="SrL_2">
+										站名
+									</li>
+									<li class="SrL_8">
+										天
+									</li>
+									<li class="SrL_3">
+										到
+									</li>
+									<li class="SrL_4">
+										开
+									</li>
+									<li class="SrL_5">
+										停
+									</li>
+									<li class="SrL_6">
+										里程
+									</li>
+									<li class="SrL_7">
+										硬座
+									</li>
+									<li class="SrL_7">
+										软座
+									</li>
+                  <li class="SrL_7">
+                    硬卧
+                  </li>
+                  <li class="SrL_7">
+                    软卧
+                  </li>
+                  <li class="SrL_7">
+                    软卧2
+                  </li>
+									<li class="SrL_7">
+										二等
+									</li>
+									<li class="SrL_7">
+										一等
+									</li>
+                  <li class="SrL_7">
+                    商务
+                  </li>
+                  <li class="SrL_7">
+                    特等
+                  </li>
+								</ul>
+							</div>
+							<!-- ui-list-row-begin attr trains -->
+							<!-- visible("${transferCost}" != "undefined") -->
+							<div class="ShowRsListBg">
+								<div class="TrTipsBox">
+									<div class="TrTipsBox_1">
+										<p class="TrTipsBoxText cf60">
+											${fromStation}中转
+										</p>
+									</div>
+									<div class="TrTipsBox_2">
+										<p class="TrTipsBoxText">
+											停留${transferCost}
+										</p>
+									</div>
+								</div>
+								<div class="clear"></div>
+							</div>
+							<!-- visible-end -->
+							<div class="ShowRsListBg">
+								<!-- ui-list-row-begin attr stops -->
+								<ul class="ShowRsList">
+									<li>
+										<div class="SrL_1">
+											${number}
+										</div>
+										<div class="SrL_2">
+											<a href="#" onclick="window.open(encodeURI('train.html?station=${station}'))">${station}</a>
+										</div>
+										<div class="SrL_8">
+											${day}
+										</div>
+										<div class="SrL_3">
+											${arrivalTime}
+										</div>
+										<div class="SrL_4">
+											${departureTime}
+										</div>
+										<div class="SrL_5">
+											${stopCost}
+										</div>
+										<div class="SrL_6">
+											${mileage}
+										</div>
+										<div class="SrL_7">
+											${prices[0]}
+										</div>
+										<div class="SrL_7">
+											${prices[1]}
+										</div>
+										<div class="SrL_7">
+											${prices[2]}
+										</div>
+										<div class="SrL_7">
+										  ${prices[3]}
+										</div>
+                    <div class="SrL_7">
+                      ${prices[4]}
+                    </div>
+                    <div class="SrL_7">
+                      ${prices[5]}
+                    </div>
+                    <div class="SrL_7">
+                      ${prices[6]}
+                    </div>
+                    <div class="SrL_7">
+                      ${prices[7]}
+                    </div>
+                    <div class="SrL_7">
+                      ${prices[8]}
+                    </div>
+									</li>
+								</ul>
+								<!-- ui-list-row-end -->
+								<div class="clear"></div>
+								<div class="Statistics">
+									<span>区间里程：${mileage}公里 区间时间：${travelCost} 花费：<b>${feeCost}</b> </span>
+									<a href="#" onclick="window.open(encodeURI('train.html?train=${train}'))">查看${train}(${startStation}-${endStation})全程时刻表</a>
+								</div>
+								<div class="clear"></div>
+							</div>
+							<!-- ui-list-row-end -->
+						</div>
+					</div>
+					<!-- ui-list-row-end -->
+					<div class="clear"></div>
+					<div class="back_top"	style="text-align: right; padding: 10px 10px 0px 0;">
+						<a href="#" class="bt_alink">返回顶部</a>
+					</div>
+				</div>
+			</div>
+			<!-- end of main -->
+			<div class="clear"></div>
+		</div>
+		<!-- end of page -->
+	</body>
+</html>
